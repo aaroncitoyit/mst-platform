@@ -1,0 +1,13 @@
+{
+  "Servers": {
+    "1": {
+      "Name": "MTS Platform (local)",
+      "Group": "Servers",
+      "Host": "postgres",
+      "Port": 5432,
+      "MaintenanceDB": "mts_platform",
+      "Username": "mts_user",
+      "SSLMode": "prefer"
+    }
+  }
+}

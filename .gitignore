@@ -1,0 +1,23 @@
+# Entorno
+.env
+
+# Backend (Laravel)
+backend/vendor/
+backend/node_modules/
+backend/.env
+backend/storage/*.key
+backend/bootstrap/cache/*
+
+# Frontend (React)
+frontend/node_modules/
+frontend/dist/
+frontend/.env
+
+# Docker
+docker/postgres/data/
+
+# Sistema
+.DS_Store
+*.log
+.idea/
+.vscode/
