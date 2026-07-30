@@ -12,7 +12,15 @@ $files = @(
     "database\seeders\001_seed_core.sql",
     "database\sql\007_spatie_compatibility.sql",
     "database\seeders\002_seed_demo_company.sql",
-    "database\sql\008_get_user_companies.sql"
+    "database\sql\008_get_user_companies.sql",
+    "database\sql\009_seed_company_modules.sql",
+    "database\sql\010_platform_and_plans.sql",
+    "database\seeders\003_seed_plans.sql",
+    "database\sql\011_migrate_existing_companies.sql",
+    "database\sql\012_services_and_clients.sql",
+    "database\seeders\004_seed_services.sql",
+    "database\sql\013_products.sql",
+    "database\sql\014_company_api_keys.sql"
 )
 
 foreach ($file in $files) {
@@ -29,7 +37,7 @@ foreach ($file in $files) {
 Write-Host "Ejecutando database\sql\006_app_role.sql ..." -ForegroundColor Cyan
 $appPassword = Read-Host "Contrasena para el rol mts_app" -AsSecureString
 $plainPassword = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto([System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($appPassword))
-Get-Content database\sql\006_app_role.sql | docker compose exec -T postgres psql -U mts_user -d mts_platform -v app_password="'$plainPassword'" -v ON_ERROR_STOP=1
+Get-Content database\sql\006_app_role.sql | docker compose exec -T postgres psql -U mts_user -d mts_platform -v app_password="$plainPassword" -v db_name=mts_platform -v ON_ERROR_STOP=1
 if ($LASTEXITCODE -ne 0) {
     Write-Host "ERROR ejecutando 006_app_role.sql. Deteniendo." -ForegroundColor Red
     exit 1

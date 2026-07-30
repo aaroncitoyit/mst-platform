@@ -94,7 +94,13 @@ return [
             'prefix' => '',
             'prefix_indexes' => true,
             'search_path' => 'public',
-            'sslmode' => 'prefer',
+
+            // 'prefer' en local (el Postgres de Docker no tiene TLS) pero
+            // DB_SSLMODE=require en produccion: con 'prefer', si la negociacion
+            // TLS falla, libpq se conecta EN CLARO sin avisar. Contra una base
+            // gestionada en internet eso son las credenciales y los datos de
+            // los clientes viajando sin cifrar.
+            'sslmode' => env('DB_SSLMODE', 'prefer'),
         ],
 
         'sqlsrv' => [

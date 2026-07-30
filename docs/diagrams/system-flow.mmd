@@ -1,0 +1,22 @@
+flowchart TD
+    A[Usuario] -->|POST /api/register| B[AuthController::register]
+    B --> C[Crear Company]
+    C --> D[SET app.current_company_id]
+    D --> E["seed_default_roles(company_id)"]
+    E --> F[Crear Usuario]
+    F --> G[Insertar company_user]
+    G --> H[Asignar rol Administrador]
+    H --> I[Generar token API]
+    I --> J[Respuesta JSON]
+
+    A -->|POST /api/login| K[AuthController::login]
+    K --> L[Buscar user por email]
+    L --> M[Validar contraseña]
+    M --> N["get_user_companies(user_id)"]
+    N --> O[Generar token API]
+    O --> P[Respuesta JSON con empresas]
+
+    A -->|GET /api/me + X-Company-Id| Q[Middleware EnsureCompanyContext]
+    Q --> R[Validar pertenencia a empresa]
+    R --> S[SET app.current_company_id]
+    S --> T[Continuar request al controlador]

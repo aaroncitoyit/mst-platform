@@ -1,0 +1,113 @@
+erDiagram
+    COMPANIES {
+        UUID id PK
+        VARCHAR name
+        VARCHAR slug
+        UUID country_id FK
+        UUID currency_id FK
+        BOOLEAN is_active
+    }
+    USERS {
+        UUID id PK
+        VARCHAR name
+        VARCHAR email
+        VARCHAR password
+        TIMESTAMPTZ email_verified_at
+    }
+    COMPANY_USER {
+        UUID company_id FK
+        UUID user_id FK
+        BOOLEAN is_owner
+    }
+    ROLES {
+        UUID id PK
+        UUID company_id FK
+        VARCHAR name
+        BOOLEAN is_system
+    }
+    PERMISSIONS {
+        UUID id PK
+        VARCHAR name
+        UUID module_id FK
+    }
+    ROLE_HAS_PERMISSIONS {
+        UUID role_id FK
+        UUID permission_id FK
+    }
+    MODEL_HAS_ROLES {
+        UUID role_id FK
+        VARCHAR model_type
+        UUID model_id
+        UUID company_id FK
+    }
+    MODEL_HAS_PERMISSIONS {
+        UUID permission_id FK
+        VARCHAR model_type
+        UUID model_id
+        UUID company_id FK
+    }
+    SUBSCRIPTIONS {
+        UUID id PK
+        UUID company_id FK
+        UUID plan_id FK
+        VARCHAR status
+    }
+    COMPANY_MODULES {
+        UUID company_id FK
+        UUID module_id FK
+        BOOLEAN is_active
+    }
+    SETTINGS {
+        UUID id PK
+        UUID company_id FK
+        VARCHAR key
+        TEXT value
+    }
+    MEDIA {
+        UUID id PK
+        UUID company_id FK
+        VARCHAR path
+    }
+    AUDIT_LOGS {
+        UUID id PK
+        UUID company_id FK
+        UUID user_id FK
+        VARCHAR action
+    }
+    NOTIFICATIONS {
+        UUID id PK
+        UUID company_id FK
+        UUID user_id FK
+        VARCHAR type
+    }
+    PLANS {
+        UUID id PK
+        VARCHAR name
+        VARCHAR slug
+        NUMERIC price
+    }
+    MODULES {
+        UUID id PK
+        VARCHAR name
+        VARCHAR slug
+    }
+
+    COMPANIES ||--o{ COMPANY_USER : has
+    USERS ||--o{ COMPANY_USER : belongs
+    COMPANIES ||--o{ SUBSCRIPTIONS : has
+    PLANS ||--o{ SUBSCRIPTIONS : has
+    COMPANIES ||--o{ COMPANY_MODULES : has
+    MODULES ||--o{ COMPANY_MODULES : has
+    COMPANIES ||--o{ ROLES : has
+    ROLES ||--o{ ROLE_HAS_PERMISSIONS : has
+    PERMISSIONS ||--o{ ROLE_HAS_PERMISSIONS : has
+    ROLES ||--o{ MODEL_HAS_ROLES : has
+    USERS ||--o{ MODEL_HAS_ROLES : has
+    PERMISSIONS ||--o{ MODEL_HAS_PERMISSIONS : has
+    USERS ||--o{ MODEL_HAS_PERMISSIONS : has
+    COMPANIES ||--o{ SETTINGS : has
+    COMPANIES ||--o{ MEDIA : has
+    COMPANIES ||--o{ AUDIT_LOGS : has
+    COMPANIES ||--o{ NOTIFICATIONS : has
+    USERS ||--o{ AUDIT_LOGS : has
+    USERS ||--o{ NOTIFICATIONS : has

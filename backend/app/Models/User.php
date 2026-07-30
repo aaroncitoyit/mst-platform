@@ -33,6 +33,19 @@ class User extends Authenticatable
     ];
 
     /**
+     * Valores por defecto en memoria.
+     *
+     * Los replica la base de datos, pero un modelo recien creado no los tenia:
+     * quedaban en null hasta releerlo. Como EnsureActiveUser comprueba
+     * is_active, un null se interpretaba como "usuario desactivado" y devolvia
+     * 403 en cuanto se usaba la instancia sin refrescar.
+     */
+    protected $attributes = [
+        'is_active' => true,
+        'is_platform_admin' => false,
+    ];
+
+    /**
      * The attributes that should be hidden for serialization.
      *
      * @var list<string>
@@ -52,6 +65,8 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'is_active' => 'boolean',
+            'is_platform_admin' => 'boolean',
         ];
     }
 }

@@ -22,6 +22,16 @@
         <env name="APP_MAINTENANCE_DRIVER" value="file"/>
         <env name="BCRYPT_ROUNDS" value="4"/>
         <env name="CACHE_STORE" value="array"/>
+        <!--
+            NO habilites sqlite aqui. El esquema de MTS no lo construyen las
+            migraciones de Laravel sino los scripts SQL de database/sql/, y las
+            politicas RLS son de PostgreSQL: con sqlite los tests de aislamiento
+            multi-tenant pasarian sin probar nada.
+
+            La conexion sale de backend/.env.testing (Laravel lo carga solo al
+            ver APP_ENV=testing), que apunta a la base mts_platform_test.
+            Crearla con: .\database\sql\setup_test_db.ps1
+        -->
         <!-- <env name="DB_CONNECTION" value="sqlite"/> -->
         <!-- <env name="DB_DATABASE" value=":memory:"/> -->
         <env name="MAIL_MAILER" value="array"/>

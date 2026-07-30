@@ -1,0 +1,138 @@
+# ==========================================
+# MTS Platform - Infraestructura en Render
+#
+# Dos servicios: la API de Laravel (contenedor) y el panel de React (estatico).
+# La base de datos NO esta aqui: vive en Neon y se apunta con variables de
+# entorno. Render tiene su propio PostgreSQL, pero el esquema, las funciones y
+# las politicas RLS ya estan instaladas en Neon con database/sql/install.sh.
+#
+# Como se usa: Render -> New -> Blueprint, y apuntar a este repositorio.
+#
+# Las variables marcadas con "sync: false" NO se guardan aqui: son secretos y
+# se escriben a mano en el panel de Render. El repositorio es publico.
+# ==========================================
+
+services:
+  # ------------------------------------------
+  # API (Laravel 12 sobre FrankenPHP)
+  # ------------------------------------------
+  - type: web
+    name: mts-api
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    # Ohio, porque tu base de Neon esta en us-east-2 (Ohio). Cada peticion hace
+    # varias consultas, y con el servicio en otra costa se pagan ~60 ms de ida y
+    # vuelta en cada una. Si algun dia mueves la base, mueve esto con ella.
+    region: ohio
+    plan: free
+
+    # Render considera vivo el servicio si esta ruta responde. La trae Laravel
+    # de serie, declarada en bootstrap/app.php con health: '/up'.
+    healthCheckPath: /up
+
+    envVars:
+      - key: APP_NAME
+        value: MTS Platform
+      - key: APP_ENV
+        value: production
+      - key: APP_DEBUG
+        value: "false"
+      - key: APP_LOCALE
+        value: es
+      - key: LOG_CHANNEL
+        value: stack
+      - key: LOG_LEVEL
+        value: error
+
+      # Genera la clave con: php artisan key:generate --show
+      # y pegala en el panel. Si cambia, se invalidan los datos cifrados.
+      - key: APP_KEY
+        sync: false
+
+      # La URL publica del servicio, con https:// delante (por ejemplo
+      # https://mts-api.onrender.com). Se rellena a mano tras el primer
+      # despliegue, cuando Render ya ha asignado el dominio: no se puede derivar
+      # con fromService porque eso devuelve el host pelado, sin esquema, y
+      # mts:comprobar-produccion exige que empiece por https.
+      - key: APP_URL
+        sync: false
+
+      # ------------------------------------------
+      # Base de datos: Neon
+      # ------------------------------------------
+      # ATENCION AL HOST. Tiene que ser el endpoint DIRECTO de Neon, el que NO
+      # lleva "-pooler". El que Neon ofrece por defecto en su panel de conexion
+      # SI lo lleva, y es PgBouncer en modo transaction: como el contexto RLS se
+      # fija con set_config(..., false), que es de sesion, la conexion vuelve al
+      # pool con la empresa de una peticion todavia puesta y la siguiente
+      # peticion la hereda. O las consultas devuelven cero filas sin error, o un
+      # cliente ve los datos de otro. No da ningun aviso.
+      - key: DB_CONNECTION
+        value: pgsql
+      - key: DB_HOST
+        sync: false
+      - key: DB_PORT
+        value: "5432"
+      - key: DB_DATABASE
+        sync: false
+
+      # mts_app, nunca el rol dueno de la base: mts_app es NOSUPERUSER
+      # NOBYPASSRLS, y es lo unico que hace que las politicas RLS se le apliquen.
+      - key: DB_USERNAME
+        sync: false
+      - key: DB_PASSWORD
+        sync: false
+
+      # require, no prefer: con prefer, si falla la negociacion TLS la conexion
+      # sigue en claro y sin avisar.
+      - key: DB_SSLMODE
+        value: require
+
+      # Sin Redis: cache, colas y sesiones van a la propia base.
+      - key: SESSION_DRIVER
+        value: database
+      - key: CACHE_STORE
+        value: database
+      - key: QUEUE_CONNECTION
+        value: database
+
+      # Dominios exactos que pueden llamar a la API, separados por comas.
+      # Al menos el del panel; mas adelante, la web del cliente en Vercel.
+      - key: CORS_ORIGENES
+        sync: false
+
+      - key: MTS_SELF_REGISTRATION
+        value: "false"
+      - key: MTS_DEFAULT_PLAN
+        value: starter
+
+      - key: MAIL_MAILER
+        value: log
+
+  # ------------------------------------------
+  # Panel de MTS (React + Vite)
+  # ------------------------------------------
+  - type: web
+    name: mts-panel
+    runtime: static
+    rootDir: frontend
+    buildCommand: npm ci && npm run build
+    staticPublishPath: ./dist
+
+    routes:
+      # React Router resuelve las rutas en el navegador: sin esto, entrar
+      # directo a /admin/empresas o recargar la pagina daria un 404 del CDN,
+      # porque ese archivo no existe en disco.
+      - type: rewrite
+        source: /*
+        destination: /index.html
+
+    envVars:
+      # OJO: en Vite las variables VITE_* se incrustan EN EL BUILD, no se leen
+      # al ejecutar. Cambiar esto obliga a reconstruir el sitio; no basta con
+      # reiniciarlo.
+      - key: VITE_API_URL
+        sync: false
+      - key: VITE_APP_NAME
+        value: MTS Platform

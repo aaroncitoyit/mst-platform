@@ -1,0 +1,48 @@
+@import 'tailwindcss';
+
+/*
+ * Sistema de diseño (seccion 10 de la especificacion del Sprint 3).
+ * Tailwind v4 es CSS-first: esto sustituye al antiguo tailwind.config.ts.
+ */
+@theme {
+  /* Azul institucional de MTS, el mismo de la documentacion tecnica */
+  --color-primary: #1d3a8a;
+  --color-primary-hover: #172f70;
+  --color-primary-soft: #eef1f9;
+
+  /* Una sola familia sans-serif del sistema, dos pesos (regular/semibold) */
+  --font-sans:
+    ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  @apply bg-slate-50 font-sans text-slate-900 antialiased;
+}
+
+/*
+ * Impresion del reporte mensual.
+ *
+ * El cliente lo va a imprimir o guardar como PDF para archivarlo, asi que la
+ * barra lateral, la barra superior y los controles no deben salir.
+ */
+@media print {
+  aside,
+  header {
+    display: none !important;
+  }
+
+  main {
+    overflow: visible !important;
+    padding: 0 !important;
+  }
+
+  body {
+    background: #fff;
+  }
+}

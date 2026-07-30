@@ -1,5 +1,10 @@
 # Entorno
+# Por patron y no por nombre: el repo es publico, y cualquier .env nuevo
+# (.env.neon, .env.produccion, .env.local...) llevaria credenciales reales.
+# Ignorar de mas es gratis; olvidarse de uno se paga con una fuga.
 .env
+.env.*
+!.env.example
 
 # Backend (Laravel)
 backend/vendor/
@@ -21,3 +26,5 @@ docker/postgres/data/
 *.log
 .idea/
 .vscode/
+node_modules
+/backups/
