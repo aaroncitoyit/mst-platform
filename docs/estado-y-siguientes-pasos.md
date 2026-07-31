@@ -1,6 +1,6 @@
 # Estado del proyecto y siguientes pasos
 
-> Punto de retomada. Actualizado el 30/07/2026.
+> Punto de retomada. Actualizado el 31/07/2026.
 > Lee también [CLAUDE.md](../CLAUDE.md) (arquitectura y convenciones),
 > [deploy/README.md](../deploy/README.md) (cómo se despliega, y en qué orden) y
 > [plan-implantacion.md](plan-implantacion.md) (el plan de la primera venta).
@@ -50,7 +50,7 @@
 |---|---|
 | **Base de datos** | Neon, proyecto `mts-platform`, región AWS US East 2 |
 | **Almacenamiento** | Cloudflare R2 — ✅ **funcionando y verificado de extremo a extremo** |
-| **Aplicación** | Google Cloud Run — scripts listos y contenedor probado, **sin desplegar** |
+| **Aplicación** | Google Cloud Run — ✅ **desplegada** el 31/07/2026 en `https://mts-api-5jur4znd5a-ul.a.run.app` |
 | **Panel de MTS** | Cloudflare Pages — configuración documentada, **sin crear** |
 | **Respaldos** | Cloud Run Job + Cloud Scheduler — script listo, **sin programar** |
 | **Web del cliente** | **Netlify**, React + Vite, sin migrar |
@@ -213,29 +213,32 @@ Sin `--con-demo`. Debe terminar diciendo **12 tablas con RLS** y **`mts_app` sin
 Luego, desde `backend/`: `php artisan migrate --force` y `php artisan mts:crear-admin`.
 </details>
 
-### 3. Desplegar en Cloud Run
+### 3. Desplegar en Cloud Run — ✅ HECHO el 31/07/2026
 
-El `Dockerfile` ya existe (FrankenPHP sobre PHP 8.5, `pdo_pgsql`, `gd`, `opcache`) y está
-**probado**: la imagen construye y escucha en el `PORT` inyectado, con `/up` devolviendo 200.
-`trustProxies` ya estaba configurado.
+Proyecto GCP `mts-platform-macedo`, región us-east5, servicio `mts-api`.
+URL: `https://mts-api-5jur4znd5a-ul.a.run.app` (`/up` responde 200).
+
+- `preparar.ps1` hecho: APIs, repositorio `mts` en Artifact Registry y los 4 secretos
+  en Secret Manager. Aviso de gasto a 0,50/0,90/1,00 en la moneda de la cuenta (PEN).
+- `desplegar.ps1` hecho: imagen `20260731-1301-283a4b3` construida en local y subida.
+- `mts:comprobar-produccion --env=neon` → **todo lo crítico en verde** (1 aviso: r2.dev,
+  deliberado hasta conectar dominio propio).
+- Dos correcciones en el camino: el aviso de gasto se crea **sin moneda explícita**
+  (la cuenta factura en PEN y `1USD` daba `INVALID_ARGUMENT`), y `ComprobarProduccion`
+  mira `config('app.env')` y no `app()->environment()` (el `--env=neon` de consola
+  sobreescribe el nombre de entorno y la comprobación fallaba en falso).
+- `.env.neon` quedó con la `APP_URL` real.
+
+Pendiente en esta pieza: nada crítico. Al redesplegar, basta:
 
 ```powershell
-.\deploy\cloud-run\preparar.ps1  -Proyecto <proyecto-gcp>   # una sola vez
-.\deploy\cloud-run\desplegar.ps1 -Proyecto <proyecto-gcp>
+.\deploy\cloud-run\desplegar.ps1 -Proyecto mts-platform-macedo
 ```
 
-Hace falta instalar **Google Cloud CLI** (`gcloud`), que hoy no está en esta máquina.
-
-`preparar.ps1` habilita las APIs, crea el repositorio de imágenes y sube a Secret Manager las
-contraseñas leyéndolas de `backend/.env.neon` — así no hay dos verdades entre lo que usa el
-despliegue y lo que usan tus comandos `--env=neon`.
-
 `desplegar.ps1` se **niega a desplegar** si `DB_HOST` lleva `-pooler`, si `DB_USERNAME` no es
-`mts_app` o si `MTS_MEDIA_DISK` no es `r2`. Y deja `APP_URL` puesta sola tras el primer despliegue,
-porque esa URL no existe hasta entonces.
+`mts_app` o si `MTS_MEDIA_DISK` no es `r2`.
 
-Después: `php artisan mts:comprobar-produccion --env=neon`. Las tres que fallan en local
-(`APP_DEBUG`, `APP_ENV`, `APP_URL`) tienen que salir en verde.
+Después de cada despliegue: `php artisan mts:comprobar-produccion --env=neon`.
 
 ### 4. El panel de React en Cloudflare Pages
 
@@ -324,8 +327,9 @@ local.
 
 ## Pendiente y no es técnico: los precios
 
-**Todo está a S/ 0,00 en producción** (verificado el 30/07/2026). Es lo único que bloquea la primera
-venta: desplegar no lo arregla. **Decisión aplazada a propósito** — se rellenará más adelante.
+**Precios puestos el 31/07/2026** para los 4 servicios que bloqueaban la primera venta (diseño,
+dominio, hosting, mantenimiento). Siguen a 0,00 a propósito: el servicio *Acceso a MTS Platform*
+(hasta que alguien contrate el panel) y los 3 planes (decorativo hasta el sprint de facturación).
 
 ### Solo hacen falta 4 números para vender
 
@@ -368,15 +372,15 @@ motivo para bloquearse buscando el número perfecto.
 
 ### El SQL, listo para rellenar
 
-Se editan por SQL porque no hay pantalla de gestión de precios (deuda conocida). Sustituir los
-`0.00` y ejecutar contra Neon:
+Se editan por SQL porque no hay pantalla de gestión de precios (deuda conocida). **Ya aplicado en
+Neon el 31/07/2026.** Por si hay que rehacerlo:
 
 ```sql
--- Los 4 que bloquean la primera venta
-update services set default_price = 0.00 where slug = 'diseno-web';             -- pago unico
-update services set default_price = 0.00 where slug = 'dominio';                -- anual
-update services set default_price = 0.00 where slug = 'hosting';                -- anual
-update services set default_price = 0.00 where slug = 'mantenimiento-mensual';  -- mensual
+-- Los 4 que bloquean la primera venta (ya aplicados)
+update services set default_price = 2500.00 where slug = 'diseno-web';            -- pago unico
+update services set default_price = 80.00 where slug = 'dominio';                 -- anual
+update services set default_price = 450.00 where slug = 'hosting';                -- anual
+update services set default_price = 350.00 where slug = 'mantenimiento-mensual';  -- mensual
 
 -- Cuando alguien contrate el panel
 update services set default_price = 0.00 where slug = 'acceso-mts-platform';    -- mensual
@@ -402,4 +406,8 @@ esté al día. Con una cuota única agrupada, esa alarma por servicio se pierde.
 > El aviso de caducidad seguiría funcionando y el ingreso recurrente no se duplicaría. Un dominio
 > que caduca sin avisar se pierde, y recuperarlo puede ser imposible.
 
-**Sigue abierto:** si la implantación (el diseño web) se cobra por adelantado o en cuotas.
+**✅ Decidido el 31/07/2026: implantación en DOS PARTES — 50% de inicial y 50% al finalizar.**
+
+El sistema no guarda registro de cobros (decisión explícita: si ya se cobró o no, lo lleva Aaron),
+así que el 50/50 no se modela en ninguna tabla: es la forma de pago que se acuerda con el cliente y
+se gestiona fuera de la herramienta.

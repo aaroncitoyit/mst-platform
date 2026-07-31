@@ -170,10 +170,14 @@ if ([string]::IsNullOrWhiteSpace($CuentaFacturacion)) {
         # Umbrales al 50%, 90% y 100%. Con un presupuesto de 1 dolar, el primer
         # correo llega en cuanto se acumulan 50 centimos: antes de que nada
         # importe, que es justo el momento util para enterarse.
+        # SIN moneda explicita: si se pasa "1USD" y la cuenta de facturacion
+        # factura en otra moneda (la de Macedo Tech es PEN), la API responde
+        # INVALID_ARGUMENT. Sin moneda usa la de la cuenta (comprobado el
+        # 31/07/2026), que para un aviso temprano vale igual.
         gcloud billing budgets create `
             --billing-account $CuentaFacturacion `
             --display-name $nombrePresupuesto `
-            --budget-amount "${PresupuestoDolares}USD" `
+            --budget-amount $PresupuestoDolares `
             --threshold-rule=percent=0.5 `
             --threshold-rule=percent=0.9 `
             --threshold-rule=percent=1.0

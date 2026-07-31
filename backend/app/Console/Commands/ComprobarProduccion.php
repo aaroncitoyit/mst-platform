@@ -37,10 +37,15 @@ class ComprobarProduccion extends Command
             'Con debug activo, cualquier error expone rutas, consultas y credenciales.',
         );
 
+        // Se mira config('app.env') y no app()->environment(): en consola,
+        // Laravel usa como nombre de entorno el valor de --env (el mecanismo
+        // para elegir el archivo .env.neon), no el APP_ENV de dentro del
+        // archivo. app()->environment() devolveria 'neon' y la comprobacion
+        // fallaria en falso aunque el archivo diga production.
         $this->critico(
             'APP_ENV en produccion',
-            app()->environment('production'),
-            'Fuera de "production" no se fuerza HTTPS ni se aplica HSTS. Ahora: '.app()->environment(),
+            config('app.env') === 'production',
+            'Fuera de "production" no se fuerza HTTPS ni se aplica HSTS. Ahora: '.config('app.env'),
         );
 
         $this->critico(
