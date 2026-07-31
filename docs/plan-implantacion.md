@@ -307,7 +307,7 @@ Es el mismo patrón que ya existe en el proyecto para el registro público.
 |---|---|
 | Cálculo del reporte | Hecho (en el navegador, con datos de prueba) |
 | Datos reales | Faltan las tablas de cotizaciones |
-| Programador mensual | Laravel lo trae, pero **necesita un cron en el servidor** → falta desplegar |
+| Programador mensual | Por hacer. Laravel trae el programador, pero **no hay nada programado**: no existe el comando ni ningún `Schedule::`. Y en Cloud Run no basta con eso — no hay cron, tendrá que dispararlo Cloud Scheduler, como el respaldo |
 | Servicio de correo | Falta uno real. Hoy solo Mailpit, que es de desarrollo |
 | Plantilla del correo | Por hacer |
 | Pantalla de aprobación en el back-office | Por hacer |

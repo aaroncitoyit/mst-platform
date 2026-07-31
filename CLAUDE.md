@@ -2,9 +2,15 @@
 
 Guía para trabajar en este repositorio. Léela antes de tocar código.
 
-> **Qué se está haciendo ahora:** [docs/plan-implantacion.md](docs/plan-implantacion.md) —
-> el plan de la primera implantación (catálogo en MTS, cotizador, despliegue en Neon + Render),
-> con las decisiones tomadas y por qué. Es el documento al que volver cuando se pierda el hilo.
+> **EMPIEZA POR AQUÍ:** [docs/estado-y-siguientes-pasos.md](docs/estado-y-siguientes-pasos.md) —
+> qué funciona, qué es maqueta, qué falta, y los avisos que cuestan caro si se olvidan
+> (Cloud Run no tiene cron, el pooler de Neon rompe el aislamiento, etc.).
+>
+> Para desplegar: [deploy/README.md](deploy/README.md) — el orden importa (R2 antes que
+> Cloud Run) y ahí está explicado por qué.
+>
+> El plan de la primera venta, con las decisiones y sus motivos, está en
+> [docs/plan-implantacion.md](docs/plan-implantacion.md).
 
 ## Qué es MTS Platform
 
@@ -204,6 +210,81 @@ el corazón funcional de la herramienta.
 **No hay registro de cobros.** El sistema dice qué vence y cuándo; si ya se cobró o no, lo lleva Aaron.
 Fue una decisión explícita para no duplicar el modelo de datos.
 
+## Producción: dónde vive cada cosa
+
+| Pieza | Dónde | Por qué ahí |
+|---|---|---|
+| Base de datos | **Neon** (PostgreSQL, AWS us-east-2) | RLS y funciones SQL propias |
+| API (Laravel) | **Google Cloud Run** (`us-east5`, Ohio) | Contenedor FrankenPHP, escala a cero |
+| Fotos de producto | **Cloudflare R2** | El disco de Cloud Run es efímero |
+| Panel (React) | **Cloudflare Pages** | Estático |
+| Respaldos | **Cloud Run Job + Cloud Scheduler** → R2 | Cloud Run no tiene cron |
+
+Los scripts y el orden de despliegue están en [deploy/README.md](deploy/README.md).
+Render se descartó; ya no hay `render.yaml`.
+
+### Todo tiene que caber en los planes gratuitos
+
+**Restricción vigente hasta que las empresas clientes den ingresos.** Antes de proponer un servicio,
+una instancia mínima o una retención más larga, mira contra qué límite gratuito juega.
+
+Nada está hoy cerca de su límite: el catálogo entero ocupa 2,2 MB de los 10 GB de R2, y la imagen
+del contenedor son 78 MB comprimidos contra 0,5 GB de Artifact Registry.
+
+> **Al medir una imagen, usa el tamaño comprimido.** `docker images` informa **sin comprimir**
+> (380 MB), pero lo que se almacena y factura son ~78 MB, y las capas comunes se deduplican.
+> Comparar la cifra sin comprimir contra la cuota lleva a conclusiones alarmistas y falsas.
+
+Aun así, todo lo que acumula lleva rotación, porque lo que crece en silencio se descubre tarde:
+`desplegar.ps1` conserva 3 imágenes y `backup.sh` rota los respaldos a 14 días avisando si falla.
+
+`--min-instances 0` en Cloud Run también es parte de esto: ponerlo a 1 factura cada hora del mes.
+Los números están en [deploy/README.md](deploy/README.md#costes-no-salirse-del-plan-gratuito).
+
+### Las tres cosas que rompen el aislamiento en producción
+
+Las tres fallan **en silencio**: la API sigue respondiendo 200 y nada aparece en los registros.
+
+1. **El host de Neon con `-pooler`.** Es PgBouncer en modo transacción, y varias peticiones
+   comparten conexión. Como el contexto se fija con `set_config(..., false)` — de sesión —, la
+   conexión vuelve al pool con la empresa de una petición todavía puesta y la siguiente la hereda.
+   **Usar siempre el endpoint directo.** `desplegar.ps1` se niega a desplegar si detecta `-pooler`.
+2. **El modo worker de FrankenPHP, o Laravel Octane.** Misma fuga, por el mismo motivo: el proceso
+   vive entre peticiones. Es tentador para quitarse el arranque de Laravel en cada llamada. No se
+   activa. Si algún día hace falta, hay que envolver cada petición en una transacción y pasar a
+   `SET LOCAL` antes.
+3. **Conectar con un rol privilegiado.** `mts_app` es `NOSUPERUSER NOBYPASSRLS`; con
+   `neondb_owner` las políticas dejan de aplicarse. `desplegar.ps1` también lo comprueba.
+
+### El disco de las fotos: `MTS_MEDIA_DISK`, no `FILESYSTEM_DISK`
+
+`config('mts.media_disk')` decide dónde se guardan las fotos de producto: `public` en local, `r2` en
+producción. Va aparte de `FILESYSTEM_DISK` a propósito, que es el disco por defecto de *todo*
+Laravel, incluidos archivos internos que no tienen por qué salir a internet.
+
+- Cada fila de `media` guarda **su** disco en la columna `disk`, así que cambiar la variable no
+  rompe las filas antiguas: se siguen sirviendo desde donde están hasta migrarlas con
+  `php artisan mts:migrar-media`.
+- El disco `r2` lleva `'visibility' => 'private'` y no es un descuido: Laravel pone `public` por
+  defecto en todo disco S3, y eso manda `ACL: public-read` en cada subida. **R2 no tiene ACLs por
+  objeto** y rechaza la petición. Lo público lo decide el dominio conectado al bucket.
+- `R2_ENDPOINT` (privado, `.r2.cloudflarestorage.com`) y `R2_URL` (público, hoy `pub-XXXX.r2.dev`)
+  son cosas distintas. Poner el primero donde va el segundo deja el catálogo entero con las
+  imágenes rotas, y responde 401 solo al navegador.
+- La dirección pública vive **solo** en `R2_URL`, nunca en `media.path`: pasar de `r2.dev` a un
+  dominio propio es editar una línea, sin migrar archivos. `sublimartes21.com` no está en
+  Cloudflare (su DNS es NS1), y R2 solo admite dominios de zonas de la propia cuenta.
+
+### El respaldo NO puede correr como `mts_app`
+
+`pg_dump` ejecuta `SET row_security = off`. Si el rol no puede saltarse RLS, PostgreSQL corta con
+*"query would be affected by row-level security policy"* — porque las 12 tablas protegidas llevan
+`FORCE ROW LEVEL SECURITY`, que aplica las políticas **incluso al dueño de la tabla**.
+
+El Job de respaldo se conecta por eso como `neondb_owner`, que hereda `BYPASSRLS` de
+`neon_superuser`. Es la única pieza del sistema que se conecta con un rol privilegiado, y solo
+para volcar.
+
 ## Comandos
 
 ### Infraestructura y base de datos
@@ -230,6 +311,10 @@ cd backend
 php artisan serve
 php artisan mts:crear-admin      # da de alta personal de MTS para el back-office
 php artisan test
+
+# Contra produccion (usa backend/.env.neon, que no esta en el repositorio)
+php artisan mts:comprobar-produccion --env=neon
+php artisan mts:migrar-media --env=neon --simular   # mueve archivos entre discos
 ```
 
 **Los tests necesitan su propia base de datos.** Las líneas de sqlite de `phpunit.xml` están
@@ -277,8 +362,12 @@ npm run test
   por SQL; no hay pantalla de gestión de planes.
 - **Nada cambia `subscriptions.status`.** Queda preparado (`active`, `past_due`, `cancelled`) pero la
   suspensión se hace hoy con `companies.is_active`. El control fino es del sprint de facturación.
-- **No hay despliegue.** Todo corre en local: sin servidor, dominio ni HTTPS, ningún cliente puede
-  entrar. Es el bloqueante real para dar acceso a nadie.
+- **El reporte mensual no existe.** Ni el comando, ni el `Schedule::`, ni los datos: lo que se ve en
+  el panel es la maqueta de `frontend/src/features/quotes/mock.ts`. Parte de la documentación habla
+  de "el programador mensual" como si estuviera construido y solo le faltara un cron; no es así.
+  Cuando se construya, en Cloud Run tendrá que dispararlo Cloud Scheduler, igual que el respaldo.
+- **`mts:migrar-media` no borra el origen.** Es deliberado (permite volver atrás), pero deja las
+  fotos duplicadas hasta que alguien limpie a mano la carpeta local.
 - La política RLS de `roles` sigue diciendo `company_id IS NULL OR ...`, residuo del enfoque anterior
   al `007`, que puso esa columna `NOT NULL`. Inofensivo pero engañoso.
 - El identificador de personal de MTS es un booleano (`users.is_platform_admin`): no hay roles

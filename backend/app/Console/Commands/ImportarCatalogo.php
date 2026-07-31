@@ -76,7 +76,10 @@ class ImportarCatalogo extends Command
         $omitidos = 0;
         $imagenes = 0;
 
+        // Se dice en voz alta: importar 51 fotos al disco equivocado se
+        // descubre tarde, cuando el catalogo sale con las imagenes rotas.
         $this->info("Importando el catalogo de {$company->name}...");
+        $this->line('  Disco de imagenes: '.config('mts.media_disk'));
 
         foreach ($datos['catalogProducts'] as $fila) {
             $nombre = trim($fila['name'] ?? '');
@@ -141,7 +144,7 @@ class ImportarCatalogo extends Command
     }
 
     /**
-     * Copia el archivo a la carpeta publica de Laravel y registra la fila en
+     * Copia el archivo al disco de archivos de cliente y registra la fila en
      * media. Si no se paso --assets, solo registra la ruta original.
      */
     private function copiarImagen(
@@ -152,6 +155,11 @@ class ImportarCatalogo extends Command
         int $orden,
         string $assets,
     ): bool {
+        // El disco NO se fija aqui: en local es 'public' y en produccion 'r2'.
+        // Se guarda ademas en la fila, para que las imagenes de antes de la
+        // mudanza a R2 se sigan sirviendo desde donde estan.
+        $disco = config('mts.media_disk');
+
         $destino = "productos/{$companyId}/".basename($ruta);
 
         if ($assets !== '') {
@@ -163,14 +171,14 @@ class ImportarCatalogo extends Command
                 return false;
             }
 
-            Storage::disk('public')->put($destino, file_get_contents($origen));
+            Storage::disk($disco)->put($destino, file_get_contents($origen));
         }
 
         DB::table('media')->insert([
             'company_id' => $companyId,
             'model_type' => 'product',
             'model_id' => $productId,
-            'disk' => 'public',
+            'disk' => $disco,
             'path' => $destino,
             'mime_type' => 'image/jpeg',
             'position' => $orden,

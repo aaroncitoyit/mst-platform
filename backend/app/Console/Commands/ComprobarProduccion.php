@@ -80,21 +80,62 @@ class ComprobarProduccion extends Command
             'Define CORS_ORIGENES en el .env con los dominios reales.',
         );
 
-        // Avisos: no bloquean, pero conviene saberlos
-        // file_exists y no is_link: en Windows los enlaces simbolicos creados
-        // por Git Bash no los reconoce is_link(), y el aviso saltaria en falso.
-        // Una comprobacion que avisa sin motivo acaba ignorandose.
-        $this->aviso(
-            'Enlace de storage creado',
-            file_exists(public_path('storage')),
-            'Sin el, las fotos de producto no se sirven. Ejecuta: php artisan storage:link',
+        // ------------------------------------------
+        // Almacenamiento de las fotos de producto
+        // ------------------------------------------
+        // Se mira el disco que se usa DE VERDAD (config mts.media_disk), no el
+        // disco 'public'. Comprobar 'public' daba un aviso permanente aunque
+        // todo estuviera bien en R2, y un aviso que salta sin motivo acaba
+        // ignorandose — que es como se cuelan los que si importan.
+        $disco = config('mts.media_disk');
+        $driver = config("filesystems.disks.{$disco}.driver");
+
+        $this->critico(
+            "Disco de archivos no efimero ({$disco})",
+            $driver !== null && $driver !== 'local',
+            'Cloud Run tiene disco efimero: con un disco local, las fotos de producto '
+            .'desaparecen en el primer redespliegue. Pon MTS_MEDIA_DISK=r2.',
         );
 
-        $this->aviso(
-            'Disco de archivos no efimero',
-            config('filesystems.disks.public.driver') !== 'local',
-            'Con disco local en un hosting efimero, las fotos desaparecen al redesplegar.',
-        );
+        // Sin URL publica, Storage::url() devuelve el endpoint privado de R2
+        // (....r2.cloudflarestorage.com), que responde 401 al navegador: el
+        // catalogo saldria con TODAS las imagenes rotas. Falla en silencio
+        // porque la peticion sale bien desde el backend.
+        if ($driver === 's3') {
+            $url = (string) config("filesystems.disks.{$disco}.url");
+
+            $this->critico(
+                'Direccion publica de los archivos configurada',
+                str_starts_with($url, 'https://')
+                    && ! str_contains($url, 'r2.cloudflarestorage.com'),
+                'Define R2_URL con la direccion PUBLICA del bucket (pub-XXXX.r2.dev o tu '
+                .'propio dominio). El endpoint de la API S3 no sirve: es privado.',
+            );
+
+            // Aviso y no fallo: r2.dev funciona y sirve para empezar. Pero
+            // Cloudflare lo limita y no lo recomienda para produccion, y es de
+            // esas cosas provisionales que se quedan para siempre si nadie las
+            // nombra en voz alta cada vez.
+            $this->aviso(
+                'Dominio propio para las imagenes',
+                ! str_contains($url, '.r2.dev'),
+                'Estas sirviendo desde r2.dev, el dominio de desarrollo de R2. Cloudflare lo '
+                .'limita. Cuando puedas, conecta un dominio propio al bucket y cambia R2_URL: '
+                .'no hay que migrar ningun archivo.',
+            );
+        }
+
+        // Avisos: no bloquean, pero conviene saberlos
+        // Solo tiene sentido si las fotos se sirven desde el disco local.
+        // file_exists y no is_link: en Windows los enlaces simbolicos creados
+        // por Git Bash no los reconoce is_link(), y el aviso saltaria en falso.
+        if ($driver === 'local') {
+            $this->aviso(
+                'Enlace de storage creado',
+                file_exists(public_path('storage')),
+                'Sin el, las fotos de producto no se sirven. Ejecuta: php artisan storage:link',
+            );
+        }
 
         $sinRls = DB::selectOne("select count(*) as n from pg_tables
                                  where schemaname = 'public'

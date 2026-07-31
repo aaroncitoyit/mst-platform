@@ -39,6 +39,11 @@ class PublicCatalogController extends Controller
             ->get()
             ->groupBy('model_id');
 
+        // OJO al pasar a R2: url() genera direcciones ESTABLES, que el navegador
+        // y el CDN pueden cachear. NO cambiar a temporaryUrl(): las URL firmadas
+        // llevan firma y caducidad distintas en cada llamada, el navegador las ve
+        // como nuevas y no cachea ninguna. Cada visita pasaria a ser una lectura
+        // facturable en R2. El bucket debe ser publico.
         $productos->each(function ($producto) use ($imagenes) {
             $fotos = $imagenes->get($producto->id, collect());
 

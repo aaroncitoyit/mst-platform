@@ -1,0 +1,11 @@
+# React Router resuelve las rutas en el navegador, no en el servidor.
+#
+# Sin esta regla, entrar directo a /admin/empresas o simplemente recargar la
+# pagina daria un 404 del CDN: ese archivo no existe en disco, solo existe
+# index.html. Se sirve index.html con codigo 200 (no 302) y React Router se
+# encarga del resto.
+#
+# Vite copia todo lo de public/ a dist/ tal cual, que es donde Cloudflare Pages
+# lo busca.
+
+/*    /index.html   200
