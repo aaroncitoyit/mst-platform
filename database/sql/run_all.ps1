@@ -3,6 +3,12 @@
 # Uso: desde la raiz del proyecto -> .\database\sql\run_all.ps1
 # ==========================================
 
+# PowerShell 5.1 pipea a procesos nativos en ASCII: los acentos de los SQL (la
+# eñe del translate de 013) llegaban a psql como '?' y el slug quedaba roto.
+# El pipe lee $OutputEncoding del ambito GLOBAL: asignarlo en el ambito local
+# del script no surte efecto (quirk de PS 5.1).
+$global:OutputEncoding = New-Object System.Text.UTF8Encoding($false)
+
 $files = @(
     "database\sql\001_reference_tables.sql",
     "database\sql\002_companies_and_tenancy.sql",
@@ -20,12 +26,13 @@ $files = @(
     "database\sql\012_services_and_clients.sql",
     "database\seeders\004_seed_services.sql",
     "database\sql\013_products.sql",
-    "database\sql\014_company_api_keys.sql"
+    "database\sql\014_company_api_keys.sql",
+    "database\sql\015_quotes.sql"
 )
 
 foreach ($file in $files) {
     Write-Host "Ejecutando $file ..." -ForegroundColor Cyan
-    Get-Content $file | docker compose exec -T postgres psql -U mts_user -d mts_platform -v ON_ERROR_STOP=1
+    Get-Content -Encoding UTF8 $file | docker compose exec -T postgres psql -U mts_user -d mts_platform -v ON_ERROR_STOP=1
     if ($LASTEXITCODE -ne 0) {
         Write-Host "ERROR ejecutando $file. Deteniendo." -ForegroundColor Red
         exit 1
@@ -37,7 +44,7 @@ foreach ($file in $files) {
 Write-Host "Ejecutando database\sql\006_app_role.sql ..." -ForegroundColor Cyan
 $appPassword = Read-Host "Contrasena para el rol mts_app" -AsSecureString
 $plainPassword = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto([System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($appPassword))
-Get-Content database\sql\006_app_role.sql | docker compose exec -T postgres psql -U mts_user -d mts_platform -v app_password="$plainPassword" -v db_name=mts_platform -v ON_ERROR_STOP=1
+Get-Content -Encoding UTF8 database\sql\006_app_role.sql | docker compose exec -T postgres psql -U mts_user -d mts_platform -v app_password="$plainPassword" -v db_name=mts_platform -v ON_ERROR_STOP=1
 if ($LASTEXITCODE -ne 0) {
     Write-Host "ERROR ejecutando 006_app_role.sql. Deteniendo." -ForegroundColor Red
     exit 1

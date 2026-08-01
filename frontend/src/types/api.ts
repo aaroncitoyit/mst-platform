@@ -202,6 +202,8 @@ export type Quote = {
   contact_name: string | null
   contact_phone: string | null
   items: QuoteItem[]
+  /** Token del enlace público. El frontend construye la URL con él. */
+  public_token: string | null
   /** Enlace público de solo lectura */
   public_url: string | null
 }

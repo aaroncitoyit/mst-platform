@@ -1,61 +1,50 @@
 import type { Quote, QuoteStatus } from '@/types/api'
-import { MOCK_QUOTES } from './mock'
+import { httpClient } from '@/lib/httpClient'
 
 /**
- * Cotizaciones que llegan de la web del cliente.
+ * Cotizaciones del cliente: lo que llega de la web al panel.
  *
- * TEMPORAL: trabaja contra datos en memoria porque las tablas `quote_requests`
- * y `quote_request_items` todavía no existen. Las firmas son las de la API real,
- * así que al construir el backend **solo cambia este archivo**.
+ * El backend (quote_requests + quote_request_items, script 015) ya existe.
+ * Estas llamadas van autenticadas: httpClient inyecta el token y el
+ * X-Company-Id, y el middleware company.context limita cada respuesta a la
+ * empresa activa. El enlace público no se guarda en la base: se construye aquí
+ * desde el token, porque el dominio cambia entre local y producción.
  */
 
-let cotizaciones: Quote[] = structuredClone(MOCK_QUOTES)
-
-function delay<T>(value: T, ms = 250): Promise<T> {
-  return new Promise((resolve) => setTimeout(() => resolve(value), ms))
+/** La URL pública es /c/{reference}-{token}, la misma que abre el visitante. */
+function enlacePublico(q: Quote): string | null {
+  if (!q.public_token) return null
+  return `${window.location.origin}/c/${q.reference.toLowerCase()}-${q.public_token}`
 }
 
-export function listQuotes() {
-  return delay(structuredClone(cotizaciones))
+function conEnlace(q: Quote): Quote {
+  return { ...q, public_url: enlacePublico(q) }
 }
 
-export async function getQuote(id: string) {
-  const found = cotizaciones.find((q) => q.id === id)
-  if (!found) throw new Error('Cotización no encontrada')
-  return delay(structuredClone(found))
+type QuoteResponse = { quote: Quote }
+
+export async function listQuotes(): Promise<Quote[]> {
+  const { data } = await httpClient.get<{ quotes: Quote[] }>('/quotes')
+  return data.quotes.map(conEnlace)
+}
+
+export async function getQuote(id: string): Promise<Quote> {
+  const { data } = await httpClient.get<QuoteResponse>(`/quotes/${id}`)
+  return conEnlace(data.quote)
 }
 
 /**
  * Guarda las cantidades que pone el asesor. En cuanto todas las líneas tienen
- * cantidad, la cotización pasa a "cotizada" y se genera su enlace público.
+ * cantidad, el backend pasa la cotización a "cotizada" y genera su token.
  */
-export async function saveQuantities(id: string, quantities: Record<string, number | null>) {
-  cotizaciones = cotizaciones.map((q) => {
-    if (q.id !== id) return q
-
-    const items = q.items.map((item) =>
-      item.id in quantities ? { ...item, quantity: quantities[item.id] } : item,
-    )
-
-    const completa = items.every((item) => item.quantity !== null && item.quantity > 0)
-
-    return {
-      ...q,
-      items,
-      status: completa && q.status === 'nueva' ? 'cotizada' : q.status,
-      public_url:
-        completa && !q.public_url
-          ? `https://app.macedotech.pe/c/${q.reference.toLowerCase()}-${Math.random().toString(16).slice(2, 12)}`
-          : q.public_url,
-    }
-  })
-
-  return getQuote(id)
+export async function saveQuantities(id: string, quantities: Record<string, number | null>): Promise<Quote> {
+  const { data } = await httpClient.patch<QuoteResponse>(`/quotes/${id}/items`, { quantities })
+  return conEnlace(data.quote)
 }
 
-export async function markQuoteStatus(id: string, status: QuoteStatus) {
-  cotizaciones = cotizaciones.map((q) => (q.id === id ? { ...q, status } : q))
-  return getQuote(id)
+export async function markQuoteStatus(id: string, status: QuoteStatus): Promise<Quote> {
+  const { data } = await httpClient.patch<QuoteResponse>(`/quotes/${id}/status`, { status })
+  return conEnlace(data.quote)
 }
 
 /* ---------- Cálculos ---------- */

@@ -18,6 +18,7 @@ import { ProductsPage } from '@/pages/catalog/ProductsPage'
 import { QuotesInboxPage } from '@/pages/quotes/QuotesInboxPage'
 import { QuoteDetailPage } from '@/pages/quotes/QuoteDetailPage'
 import { MonthlyReportPage } from '@/pages/reports/MonthlyReportPage'
+import { PublicQuotePage } from '@/pages/public/PublicQuotePage'
 import { AdminHomePage } from '@/pages/admin/AdminHomePage'
 import { CompaniesListPage } from '@/pages/admin/CompaniesListPage'
 import { CreateCompanyPage } from '@/pages/admin/CreateCompanyPage'
@@ -76,6 +77,10 @@ export function AppRouter() {
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
       <Route path="/403" element={<ForbiddenPage />} />
+
+      {/* Cotización pública: la abre el cliente final desde el enlace del
+          WhatsApp. Sin login a propósito: el token del enlace es la credencial. */}
+      <Route path="/c/:token" element={<PublicQuotePage />} />
 
       <Route element={<RequireAuth />}>
         {/* La raiz lleva a cada uno a su sitio: el personal de MTS al

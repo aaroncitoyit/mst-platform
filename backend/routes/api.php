@@ -5,6 +5,8 @@ use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\CompanyController;
 use App\Http\Controllers\Api\ProductController;
 use App\Http\Controllers\Api\PublicCatalogController;
+use App\Http\Controllers\Api\PublicQuoteController;
+use App\Http\Controllers\Api\QuoteController;
 use App\Http\Controllers\Api\Admin\ApiKeyController;
 use App\Http\Controllers\Api\Admin\ClientNoteController;
 use App\Http\Controllers\Api\Admin\ClientServiceController;
@@ -30,7 +32,14 @@ Route::middleware(['api.key', 'throttle:60,1'])
     ->prefix('public')
     ->group(function () {
         Route::get('/catalogo', [PublicCatalogController::class, 'index']);
+        Route::post('/cotizaciones', [PublicQuoteController::class, 'store']);
     });
+
+// El enlace publico de una cotizacion: va sin clave de sitio porque el token
+// ES la credencial (un random de 40 caracteres que solo el asesor conoce).
+Route::middleware('throttle:60,1')->group(function () {
+    Route::get('/public/cotizaciones/{token}', [PublicQuoteController::class, 'show']);
+});
 
 // Autenticado, pero SIN contexto de empresa: lo que el frontend necesita para
 // arrancar cuando todavia no hay empresa activa.
@@ -49,6 +58,12 @@ Route::middleware(['auth:sanctum', 'user.active', 'company.context'])->group(fun
     // Catalogo que gestiona el propio cliente
     Route::get('/products', [ProductController::class, 'index']);
     Route::patch('/products/{id}', [ProductController::class, 'update']);
+
+    // Cotizaciones que recibe el cliente desde su web
+    Route::get('/quotes', [QuoteController::class, 'index']);
+    Route::get('/quotes/{id}', [QuoteController::class, 'show']);
+    Route::patch('/quotes/{id}/items', [QuoteController::class, 'updateItems']);
+    Route::patch('/quotes/{id}/status', [QuoteController::class, 'updateStatus']);
 });
 
 // Back-office de MTS. platform.admin es la unica barrera que protege

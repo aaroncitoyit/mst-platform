@@ -13,6 +13,13 @@
 
 $testDb = "mts_platform_test"
 
+# PowerShell 5.1 lee por defecto en ANSI y pipea a procesos nativos en ASCII:
+# los acentos de los SQL (la eñe del translate de 013) llegaban a psql como '?'
+# y el slug quedaba roto. Hay que leer UTF-8 y emitir UTF-8 por el pipe. El
+# pipe lee $OutputEncoding del ambito GLOBAL: asignarlo en el ambito local del
+# script no surte efecto (quirk de PS 5.1).
+$global:OutputEncoding = New-Object System.Text.UTF8Encoding($false)
+
 Write-Host "Recreando la base $testDb ..." -ForegroundColor Cyan
 docker compose exec -T postgres psql -U mts_user -d postgres -c "DROP DATABASE IF EXISTS $testDb;"
 docker compose exec -T postgres psql -U mts_user -d postgres -c "CREATE DATABASE $testDb;"
@@ -38,12 +45,13 @@ $files = @(
     "database\sql\012_services_and_clients.sql",
     "database\seeders\004_seed_services.sql",
     "database\sql\013_products.sql",
-    "database\sql\014_company_api_keys.sql"
+    "database\sql\014_company_api_keys.sql",
+    "database\sql\015_quotes.sql"
 )
 
 foreach ($file in $files) {
     Write-Host "  $file" -ForegroundColor DarkGray
-    Get-Content $file | docker compose exec -T postgres psql -U mts_user -d $testDb -v ON_ERROR_STOP=1 -q
+    Get-Content -Encoding UTF8 $file | docker compose exec -T postgres psql -U mts_user -d $testDb -v ON_ERROR_STOP=1 -q
     if ($LASTEXITCODE -ne 0) {
         Write-Host "ERROR ejecutando $file." -ForegroundColor Red
         exit 1

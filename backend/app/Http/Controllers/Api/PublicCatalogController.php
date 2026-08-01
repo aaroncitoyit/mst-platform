@@ -49,6 +49,9 @@ class PublicCatalogController extends Controller
 
             $producto->images = $fotos
                 ->map(fn ($m) => [
+                    // id es el design_id que la web manda al pedir cotizacion,
+                    // para que el asesor vea en el panel cual diseno eligio.
+                    'id' => $m->id,
                     'url' => Storage::disk($m->disk)->url($m->path),
                     // Nunca vacio: es accesibilidad y SEO
                     'alt' => $m->alt_text ?: $producto->name,

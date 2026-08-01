@@ -9,6 +9,12 @@
 
 ## Dónde estamos
 
+> **Producción EN VIVO desde el 31/07/2026**: API en
+> `https://mts-api-5jur4znd5a-ul.a.run.app` (Cloud Run) y panel en
+> `https://mst-panel.pages.dev` (Cloudflare Pages), ambos conectados a Neon y a R2.
+> La base de producción está **vacía de datos de clientes** (0 empresas, 0 productos) a propósito:
+> se cargan desde el back-office cuando toque (paso 6).
+
 ### Funciona y está verificado
 
 - **Core multi-tenant** con RLS en 12 tablas. `mts_app` es `NOSUPERUSER NOBYPASSRLS` y hay tests que
@@ -51,7 +57,7 @@
 | **Base de datos** | Neon, proyecto `mts-platform`, región AWS US East 2 |
 | **Almacenamiento** | Cloudflare R2 — ✅ **funcionando y verificado de extremo a extremo** |
 | **Aplicación** | Google Cloud Run — ✅ **desplegada** el 31/07/2026 en `https://mts-api-5jur4znd5a-ul.a.run.app` |
-| **Panel de MTS** | Cloudflare Pages — configuración documentada, **sin crear** |
+| **Panel de MTS** | Cloudflare Pages — ✅ **desplegado** el 31/07/2026 en `https://mst-panel.pages.dev` |
 | **Respaldos** | Cloud Run Job + Cloud Scheduler — script listo, **sin programar** |
 | **Web del cliente** | **Netlify**, React + Vite, sin migrar |
 
@@ -240,15 +246,29 @@ Pendiente en esta pieza: nada crítico. Al redesplegar, basta:
 
 Después de cada despliegue: `php artisan mts:comprobar-produccion --env=neon`.
 
-### 4. El panel de React en Cloudflare Pages
+### 4. El panel de React en Cloudflare Pages — ✅ HECHO el 31/07/2026
 
-Ver [deploy/cloudflare-pages.md](../deploy/cloudflare-pages.md). Lo que se olvida: el `/api` al
-final de `VITE_API_URL`, y añadir el dominio de Pages a `CORS_ORIGENES` de la API.
+Proyecto **`mst-panel`** (así, con "st", no "mts") en `https://mst-panel.pages.dev`.
+Conectado a Git (build automático en cada push a `main`): framework Vite, root `frontend`,
+`npm ci && npm run build`, salida `dist`, `_redirects` ya versionado.
 
-### 5. Programar los respaldos
+- `VITE_API_URL=https://mts-api-5jur4znd5a-ul.a.run.app/api` (**con el `/api`**) y
+  `VITE_APP_NAME=MTS Platform`, puestos como variables de entorno del build en el panel.
+- `CORS_ORIGENES` de la API actualizado a `https://mst-panel.pages.dev` y API redesplegada.
+  Verificado: el preflight devuelve `Access-Control-Allow-Origin: https://mst-panel.pages.dev`.
+
+> El `/api` al final de `VITE_API_URL` es lo que se olvida (todas las llamadas dan 404 sin él),
+> y el dominio del panel tiene que estar en `CORS_ORIGENES` (si no, el navegador bloquea y la
+> consola habla de CORS sin decir que el origen no está en la lista).
+
+La web pública de SublimArte NO va aquí: es otra cosa (hoy Netlify, Next.js más adelante).
+
+### 5. Programar los respaldos — ⏳ PENDIENTE
+
+Con el proyecto ya creado, el comando queda:
 
 ```powershell
-.\deploy\respaldo\programar.ps1 -Proyecto <proyecto-gcp> -ClaveDueno "..."
+.\deploy\respaldo\programar.ps1 -Proyecto mts-platform-macedo -ClaveDueno "..."
 ```
 
 Crea el Cloud Run Job, lo programa con Cloud Scheduler a las 03:00 de Lima **y lo ejecuta una vez
@@ -259,19 +279,29 @@ para comprobarlo** — un respaldo sin probar no es un respaldo.
 > by row-level security policy"* si el rol no puede saltarse RLS. Con `mts_app` el respaldo no
 > fallaría a medias: no existiría.
 
-### 6. Volver a cargar los datos reales
+### 6. Volver a cargar los datos reales — ⏳ PENDIENTE
 
-No copiar la base local: tiene basura de desarrollo. Registrar los clientes desde el back-office e
-importar el catálogo:
+Verificado el 31/07/2026 en Neon: **0 empresas, 0 productos, 0 imágenes** (solo el admin de
+plataforma). No copiar la base local: tiene basura de desarrollo. Registrar los clientes desde el
+back-office e importar el catálogo:
 
 ```powershell
 php artisan mts:importar-catalogo <slug-empresa> `
-  "D:/Web/SublimArte/public/data/data.json" --assets="D:/Web/SublimArte/public"
+  "D:/Web/SublimArte/public/data/data.json" --assets="D:/Web/SublimArte/public" --env=neon
 ```
+
+Con `MTS_MEDIA_DISK=r2` en `.env.neon`, las imágenes van directas a R2. El comando dice a qué
+disco escribe antes de empezar; si dice `public`, párate.
 
 ### 7. Y después
 
-Migrar la web a Next.js, construir el cotizador, y la auditoría de accesos.
+- **Pendiente rápido**: ocultar la maqueta de cotizaciones/reporte antes de enseñar el panel a un
+  cliente (3 líneas en `frontend/src/app/router.tsx`).
+- Migrar la web a Next.js (decidir Netlify vs Vercel y corregir `plan-implantacion.md`).
+- Construir el cotizador de verdad (`quote_requests`), el middleware `EnsureModuleActive` y la
+  auditoría de accesos.
+- Conectar un dominio propio al bucket de R2 (`R2_URL`) cuando se pueda mover el DNS de
+  `sublimartes21.com`: activa la caché de CDN y quita el límite de `r2.dev`.
 
 ---
 
@@ -329,7 +359,8 @@ local.
 
 **Precios puestos el 31/07/2026** para los 4 servicios que bloqueaban la primera venta (diseño,
 dominio, hosting, mantenimiento). Siguen a 0,00 a propósito: el servicio *Acceso a MTS Platform*
-(hasta que alguien contrate el panel) y los 3 planes (decorativo hasta el sprint de facturación).
+(hasta que alguien contrate el panel) y los 3 planes (hoy no cobran nada; la decisión de ponerles
+precio de etiqueta está tomada, ver más abajo).
 
 ### Solo hacen falta 4 números para vender
 
@@ -350,8 +381,12 @@ cartera: web + dominio + hosting + mantenimiento.
 
 Los 3 planes (`Starter` CMS · `Profesional` CMS+CRM · `Empresarial` CMS+CRM+ERP+AI) están a 0,00,
 y **da igual por ahora**: `plans.price` no se suma ni se factura en ningún sitio. Solo se usa para
-ordenar la lista (`orderBy('price')` en `PlatformController`). Es decorativo hasta el sprint de
-facturación.
+ordenar la lista (`orderBy('price')` en `PlatformController`) y como etiqueta de nivel.
+
+**✅ Decidido el 31/07/2026: ponerles precio de etiqueta igualmente** — el panel mostraba
+"Precio sin definir" (un aviso alarmante para enseñar a alguien), y aunque el precio no se cobre,
+una etiqueta con número queda más profesional. **Faltan los 3 números** (Starter, Profesional,
+Empresarial): hasta que se rellenen, la pantalla sigue con el aviso.
 
 Eso además deshace un solapamiento que parece un problema y no lo es: el servicio *"Acceso a MTS
 Platform"* (mensual) y el precio del plan (mensual) parecen cobrar dos veces lo mismo. **No lo
@@ -385,7 +420,8 @@ update services set default_price = 350.00 where slug = 'mantenimiento-mensual';
 -- Cuando alguien contrate el panel
 update services set default_price = 0.00 where slug = 'acceso-mts-platform';    -- mensual
 
--- Cuando llegue la facturacion. Hoy no cobran nada.
+-- Planes: pendiente rellenar los numeros (decision tomada el 31/07/2026,
+-- son etiqueta, no se cobran). Hoy siguen a 0.00.
 update plans set price = 0.00 where slug = 'starter';
 update plans set price = 0.00 where slug = 'profesional';
 update plans set price = 0.00 where slug = 'empresarial';
